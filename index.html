@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Play Chess Online</title>
+<style>
+  :root{--bg:#1e1b18;--panel:#2b2723;--text:#f1ece4;--muted:#a79f94;--light:#ecd9b0;--dark:#a67b52;--accent:#6fb35a;--sel:#f6e05e;--danger:#d9534f}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center}
+  header{padding:20px 16px 8px;text-align:center}
+  h1{margin:0;font-size:1.8rem}
+  .sub{color:var(--muted);margin-top:4px}
+  main{width:100%;max-width:960px;padding:16px;display:flex;justify-content:center}
+  .card{background:var(--panel);border-radius:12px;padding:24px;max-width:420px;width:100%}
+  .card h2{margin-top:0}
+  button{font:inherit;border:0;border-radius:8px;padding:12px 18px;background:var(--accent);color:#102008;font-weight:600;cursor:pointer}
+  button.secondary{background:#443e37;color:var(--text)}
+  button.danger{background:var(--danger);color:#fff}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  input{font:inherit;padding:12px;border-radius:8px;border:1px solid #554e46;background:#1e1b18;color:var(--text);text-transform:uppercase;letter-spacing:.2em;width:100%;text-align:center}
+  .row{display:flex;gap:10px;margin-top:12px}
+  .or{text-align:center;color:var(--muted);margin:16px 0}
+  .code{font-size:2.4rem;letter-spacing:.25em;text-align:center;background:#1e1b18;border-radius:8px;padding:12px;margin:12px 0;user-select:all}
+  .hidden{display:none!important}
+  #game{display:flex;gap:20px;flex-wrap:wrap;justify-content:center;width:100%}
+  #boardWrap{width:min(92vw,560px)}
+  #board{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);aspect-ratio:1;border-radius:6px;overflow:hidden;box-shadow:0 8px 30px #0008}
+  .sq{position:relative;min-width:0;min-height:0;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:min(9vw,56px);line-height:1;cursor:pointer;user-select:none}
+  .sq.l{background:var(--light)} .sq.d{background:var(--dark)}
+  .sq.sel{background:var(--sel)!important}
+  .sq.last::after{content:"";position:absolute;inset:0;background:#f6e05e55}
+  .sq.hint::before{content:"";position:absolute;width:28%;height:28%;border-radius:50%;background:#0006}
+  .sq.hint.cap::before{width:92%;height:92%;background:none;border:5px solid #0006}
+  .sq.check{box-shadow:inset 0 0 0 4px var(--danger)}
+  .w{color:#fff;text-shadow:0 0 2px #000,0 0 2px #000,0 0 3px #000}
+  .b{color:#111;text-shadow:0 0 1px #fff8}
+  .piece{position:relative;z-index:1}
+  .player{display:flex;justify-content:space-between;padding:8px 4px;color:var(--muted)}
+  .player.turn{color:var(--text);font-weight:600}
+  .player.turn::before{content:"● ";color:var(--accent)}
+  #side{width:min(92vw,260px);display:flex;flex-direction:column;gap:12px}
+  #status{background:var(--panel);border-radius:10px;padding:14px;font-weight:600}
+  #moves{background:var(--panel);border-radius:10px;padding:14px;height:260px;overflow:auto;font-family:ui-monospace,Consolas,monospace;font-size:.9rem;color:var(--muted)}
+  #promo{position:fixed;inset:0;background:#000a;display:flex;align-items:center;justify-content:center;z-index:10}
+  #promo .card{width:auto;text-align:center}
+  #promo button{font-size:2.5rem;background:var(--light);color:#111;margin:4px;padding:6px 14px}
+  .msg{color:var(--muted);min-height:1.4em;margin-top:10px;font-size:.9rem}
+</style>
+</head>
+<body>
+<header>
+  <h1>♞ Play Chess Online</h1>
+  <div class="sub">Challenge a friend in real time — no account needed</div>
+</header>
+
+<main>
+  <section id="lobby" class="card">
+    <h2>Start a game</h2>
+    <button id="createBtn" style="width:100%">Create a game</button>
+    <div id="waiting" class="hidden">
+      <p>Share this code with your friend:</p>
+      <div class="code" id="codeOut">-----</div>
+      <div class="row"><button class="secondary" id="copyBtn" style="flex:1">Copy invite link</button></div>
+      <div class="msg">Waiting for opponent to join…</div>
+    </div>
+    <div class="or">— or join a friend —</div>
+    <input id="codeIn" maxlength="5" placeholder="CODE" autocomplete="off">
+    <div class="row"><button id="joinBtn" style="flex:1">Join game</button></div>
+    <div class="msg" id="lobbyMsg"></div>
+  </section>
+
+  <section id="game" class="hidden">
+    <div id="boardWrap">
+      <div class="player" id="topPlayer"></div>
+      <div id="board"></div>
+      <div class="player" id="botPlayer"></div>
+    </div>
+    <div id="side">
+      <div id="status"></div>
+      <div id="moves"></div>
+      <div class="row" style="margin:0">
+        <button class="danger" id="resignBtn" style="flex:1">Resign</button>
+        <button id="rematchBtn" class="hidden" style="flex:1">Rematch</button>
+      </div>
+      <button class="secondary" id="leaveBtn">Leave game</button>
+    </div>
+  </section>
+</main>
+
+<div id="promo" class="hidden"><div class="card"><h3>Promote to</h3><div id="promoBtns"></div></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const GLYPH = {k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
+const PREFIX = 'chessgame-';
+const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+let peer, conn, game, myColor, selected = null, legal = [], lastMove = null;
+let over = false, resultText = '', wantRematch = false, theyWantRematch = false, hostedBefore = false;
+
+function randomCode(){ let s=''; for(let i=0;i<5;i++) s+=ALPHABET[Math.floor(Math.random()*ALPHABET.length)]; return s; }
+
+// ---------- Lobby ----------
+function createGame(){
+  $('createBtn').disabled = true;
+  const code = randomCode();
+  peer = new Peer(PREFIX + code);
+  peer.on('open', () => {
+    $('codeOut').textContent = code;
+    $('waiting').classList.remove('hidden');
+    $('lobbyMsg').textContent = '';
+  });
+  peer.on('connection', c => {
+    if (conn) { c.close(); return; }
+    conn = c; setupConn();
+    conn.on('open', () => startGame('w'));
+  });
+  peer.on('error', e => {
+    if (e.type === 'unavailable-id') { peer.destroy(); createGame(); return; }
+    $('lobbyMsg').textContent = 'Connection error: ' + e.type;
+    $('createBtn').disabled = false;
+  });
+}
+
+function joinGame(code){
+  code = (code||'').trim().toUpperCase();
+  if (code.length !== 5) { $('lobbyMsg').textContent = 'Enter the 5-character code.'; return; }
+  $('lobbyMsg').textContent = 'Connecting…';
+  peer = new Peer();
+  peer.on('open', () => {
+    conn = peer.connect(PREFIX + code, {reliable:true});
+    setupConn();
+    conn.on('open', () => startGame('b'));
+  });
+  peer.on('error', e => {
+    $('lobbyMsg').textContent = e.type === 'peer-unavailable' ? 'No game found with that code.' : 'Connection error: ' + e.type;
+  });
+}
+
+function setupConn(){
+  conn.on('data', onData);
+  conn.on('close', () => { if (!over) endGame('Opponent disconnected.'); });
+}
+
+// ---------- Game ----------
+function startGame(color){
+  myColor = color;
+  game = new Chess();
+  selected = null; legal = []; lastMove = null;
+  over = false; resultText = ''; wantRematch = theyWantRematch = false;
+  $('lobby').classList.add('hidden');
+  $('game').classList.remove('hidden');
+  $('rematchBtn').classList.add('hidden');
+  $('resignBtn').classList.remove('hidden');
+  $('rematchBtn').textContent = 'Rematch';
+  render();
+}
+
+function onData(d){
+  if (d.t === 'move' && game && !over) {
+    const m = game.move({from:d.from,to:d.to,promotion:d.promotion});
+    if (m) { lastMove = m; selected = null; legal = []; afterMove(); }
+  } else if (d.t === 'resign') {
+    endGame('Opponent resigned. You win!');
+  } else if (d.t === 'rematch') {
+    theyWantRematch = true;
+    if (wantRematch) startGame(myColor === 'w' ? 'b' : 'w'); else render();
+  }
+}
+
+function afterMove(){
+  if (game.in_checkmate()) endGame('Checkmate — ' + (game.turn()==='w' ? 'Black' : 'White') + ' wins!');
+  else if (game.in_stalemate()) endGame('Draw by stalemate.');
+  else if (game.insufficient_material()) endGame('Draw — insufficient material.');
+  else if (game.in_threefold_repetition()) endGame('Draw by repetition.');
+  else if (game.in_draw()) endGame('Draw.');
+  else render();
+}
+
+function endGame(text){
+  over = true; resultText = text;
+  $('resignBtn').classList.add('hidden');
+  if (conn && conn.open) $('rematchBtn').classList.remove('hidden');
+  render();
+}
+
+function tryMove(from, to){
+  const cands = legal.filter(m => m.to === to);
+  if (!cands.length) return;
+  const finish = promotion => {
+    const m = game.move({from, to, promotion});
+    if (!m) return;
+    lastMove = m; selected = null; legal = [];
+    conn.send({t:'move', from, to, promotion});
+    afterMove();
+  };
+  if (cands[0].promotion) {
+    const box = $('promoBtns'); box.innerHTML = '';
+    ['q','r','b','n'].forEach(p => {
+      const b = document.createElement('button');
+      b.textContent = {q:'♕',r:'♖',b:'♗',n:'♘'}[p];
+      b.onclick = () => { $('promo').classList.add('hidden'); finish(p); };
+      box.appendChild(b);
+    });
+    $('promo').classList.remove('hidden');
+  } else finish(undefined);
+}
+
+function clickSquare(name){
+  if (over || game.turn() !== myColor) return;
+  if (selected && legal.some(m => m.to === name)) { tryMove(selected, name); return; }
+  const p = game.get(name);
+  if (p && p.color === myColor) {
+    selected = name;
+    legal = game.moves({square:name, verbose:true});
+  } else { selected = null; legal = []; }
+  render();
+}
+
+// ---------- Rendering ----------
+function render(){
+  const board = $('board'); board.innerHTML = '';
+  const flip = myColor === 'b';
+  const kingSq = game.in_check() ? findKing(game.turn()) : null;
+  for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) {
+    const rank = flip ? r + 1 : 8 - r;
+    const file = flip ? 7 - f : f;
+    const name = 'abcdefgh'[file] + rank;
+    const sq = document.createElement('div');
+    sq.className = 'sq ' + ((file + rank) % 2 === 1 ? 'l' : 'd');
+    if (name === selected) sq.classList.add('sel');
+    if (lastMove && (name === lastMove.from || name === lastMove.to)) sq.classList.add('last');
+    const mv = legal.find(m => m.to === name);
+    if (mv) { sq.classList.add('hint'); if (game.get(name) || mv.flags.includes('e')) sq.classList.add('cap'); }
+    if (name === kingSq) sq.classList.add('check');
+    const p = game.get(name);
+    if (p) {
+      const s = document.createElement('span');
+      s.className = 'piece ' + p.color;
+      s.textContent = GLYPH[p.type];
+      sq.appendChild(s);
+    }
+    sq.onclick = () => clickSquare(name);
+    board.appendChild(sq);
+  }
+
+  const me = myColor === 'w' ? 'White' : 'Black', opp = myColor === 'w' ? 'Black' : 'White';
+  $('botPlayer').textContent = 'You (' + me + ')';
+  $('topPlayer').textContent = 'Opponent (' + opp + ')';
+  $('botPlayer').classList.toggle('turn', !over && game.turn() === myColor);
+  $('topPlayer').classList.toggle('turn', !over && game.turn() !== myColor);
+
+  let status;
+  if (over) status = resultText + (wantRematch ? ' Waiting for opponent…' : theyWantRematch ? ' Opponent wants a rematch!' : '');
+  else if (game.turn() === myColor) status = 'Your move' + (game.in_check() ? ' — you are in check!' : '');
+  else status = "Opponent's move" + (game.in_check() ? ' (check)' : '');
+  $('status').textContent = status;
+
+  const h = game.history(); let out = '';
+  for (let i = 0; i < h.length; i += 2) out += (i/2+1) + '. ' + h[i] + ' ' + (h[i+1] || '') + '\n';
+  $('moves').style.whiteSpace = 'pre'; $('moves').textContent = out;
+  $('moves').scrollTop = 1e6;
+}
+
+function findKing(color){
+  for (const row of game.board()) for (const p of row) if (p && p.type==='k' && p.color===color) return p.square;
+}
+
+// ---------- Buttons ----------
+$('createBtn').onclick = createGame;
+$('joinBtn').onclick = () => joinGame($('codeIn').value);
+$('codeIn').onkeydown = e => { if (e.key === 'Enter') joinGame($('codeIn').value); };
+$('copyBtn').onclick = () => {
+  const url = location.origin + location.pathname + '#' + $('codeOut').textContent;
+  navigator.clipboard.writeText(url).then(() => { $('copyBtn').textContent = 'Copied!'; setTimeout(()=>$('copyBtn').textContent='Copy invite link',1500); });
+};
+$('resignBtn').onclick = () => {
+  if (!confirm('Resign this game?')) return;
+  conn.send({t:'resign'}); endGame('You resigned.');
+};
+$('rematchBtn').onclick = () => {
+  if (!conn || !conn.open) return;
+  wantRematch = true; conn.send({t:'rematch'});
+  if (theyWantRematch) startGame(myColor === 'w' ? 'b' : 'w'); else render();
+};
+$('leaveBtn').onclick = () => location.href = location.pathname;
+
+// Invite links: page#CODE auto-joins
+if (location.hash.length === 6) { const c = location.hash.slice(1); $('codeIn').value = c; joinGame(c); }
+</script>
+</body>
+</html>
